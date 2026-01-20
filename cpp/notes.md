@@ -4,6 +4,7 @@
 ## Mainloop
 - mnk is kBlockM, kBlockN and kHeadDim, and then kHeadDimV is for V
 - the producer is just 1 warp, they use a warpgroup if the producer is doing more stuff, and then you'd have to add logic to select warp0
+- for pipelines, q they just use a barrier since there's no pipeline. KV they use pipeline
 # Strategy notes
 ## Mainloop
 - register bandwidth is actually a bottleneck so you don't want Q in registers
@@ -35,3 +36,12 @@
 - if you load with cp.async you don't have `expect_tx`
 - instead, you do cp async wait group and then arrive at the barrier. Threadcount makes it so all threads have to arrive(load is done) before the barrier is ready
 - with TMA you `arrive_and_expect_tx` at the start and then you do your copy
+
+## Transpose_V
+- they transpose V in smem if they're FP8 and V is row-major. I guess for FP8 you just need that?
+
+## IntraWGOverlap
+- when you're in the mainloop, you load k for the current block. If IntraWGOverlap, we actually load the previous v block
+- otherwise, we load the current v block, and then you have this one tail v block to load
+- With no intra warpgroup overlap it will load Kn, Vn, (for) (Kn-1 Vn-1) ... (K0 V0)
+- With IWO they will load Kn, (for) (Kn-1 Vn) ... (K0 V1) endfor V0. Check paper for details
