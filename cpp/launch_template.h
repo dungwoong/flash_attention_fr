@@ -4,6 +4,7 @@
 #include "cutlass/device_kernel.h"
 #include "cutlass/kernel_launch.h"
 
+#include "sm90_pipeline_no_cluster.hpp"
 #include "mainloop.h"
 #include "kernel.h"
 #include "epilogue.h"
@@ -29,11 +30,14 @@ void run_flash_fwd(cudaStream_t stream) {
     using TileShape_MNK = cute::Shape<Int<BlockM>, Int<BlockN>, Int<kHeadDim>>;
     using TileShape_MNK_PV = cute::Shape<Int<BlockM>, Int<kHeadDimV>, Int<BlockN>>;
 
-    using CollectiveMainloop = myflash::CollectiveMainloop<kHeadDim, kHeadDimV, Element, ElementOut, BlockM, BlockN>;
-    using CollectiveEpilogue = myflash::Epilogue<TileShape_MNK_PV, ElementOut>;
-    using Scheduler = myflash::SingleTileScheduler<BlockM>; // that's all you need to split things
-
-    using AttnKernel = myflash::Kernel<CollectiveMainloop, CollectiveEpilogue, Scheduler>;
+    using AttnKernel = myflash::Kernel<
+        kHeadDim, kHeadDimV, 
+        Element, float, ElementOut, 
+        BlockM, BlockN, 
+        TileShape_MNK, TileShape_MNK_PV,
+        2, // stages
+        ClusterShape
+        >;
 
     // TODO construct mainloop, epilogue, scheduler args
 
