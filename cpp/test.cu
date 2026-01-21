@@ -8,5 +8,6 @@ int main() {
     cudaStreamCreate(&stream);
 
     run_flash_fwd<64, 64, cutlass::bfloat16_t, cutlass::bfloat16_t, 128, 128>(stream);
+    cudaDeviceSynchronize();
     std::cout << "Finished" << std::endl;
 }

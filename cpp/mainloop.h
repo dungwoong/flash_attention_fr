@@ -19,6 +19,15 @@ public:
         int num_loops;
     };
 
+    template <class C>
+    static CUTLASS_DEVICE
+    void println(C s, bool Producer) {
+        int idx = Producer ? 0 : 128;
+        if (threadIdx.x == idx) {
+            cute::print(s);
+        }
+    }
+
     template <typename SharedStorage>
     CUTLASS_DEVICE void
     load(
@@ -29,6 +38,7 @@ public:
         PipelineState& smem_pipe_write,
         SharedStorage& shared_storage
     ) {
+        println("[Prod] in\n", true);
 
         // producer acquire will wait empty arrive and expect tx full
         auto load_K = [&] (int const n_block, auto const& smem_pipe_write) {
@@ -39,11 +49,16 @@ public:
             pipeline_v.producer_acquire(smem_pipe_write);
         };
 
+        println("[Prod] yi\n", true);
+
         if (cute::elect_one_sync()) {
-            shared_storage.pipelines.barrier_Q.arrive_and_expect_tx(TmaTransactionBytesQ);
+            println("Arrive Q\n", true);
+            shared_storage.pipelines.barrier_Q.arrive_and_expect_tx(0);
         }
 
+        println("[Prod] before loop\n", true);
         for (int i = 0; i < num_loops; ++i) {
+            println("[Prod]Loop\n", true);
             load_K(i, smem_pipe_write);
             load_V(i, smem_pipe_write);
             ++smem_pipe_write;
@@ -79,12 +94,16 @@ public:
             pipeline.consumer_wait(smem_pipe_read, barrier_token);
         };
 
-        shared_storage.pipelines.barrier_Q.wait(0); // phase should flip when you move onto next work
+        // shared_storage.pipelines.barrier_Q.wait(1); // phase should flip when you move onto next work
 
         for (int i = 0; i < num_loops; ++i) {
             consumer_wait(pipeline_k, smem_pipe_read); // wait full
-            pipeline_k.consumer_release(smem_pipe_read); // arrive empty
             consumer_wait(pipeline_v, smem_pipe_read);
+
+            if (threadIdx.x == 128) {
+                cute::print("Wait full\n");
+            }
+            pipeline_k.consumer_release(smem_pipe_read); // arrive empty
             pipeline_v.consumer_release(smem_pipe_read);
             ++smem_pipe_read;
         }

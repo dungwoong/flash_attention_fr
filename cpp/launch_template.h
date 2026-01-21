@@ -9,6 +9,7 @@
 #include "kernel.h"
 #include "epilogue.h"
 #include "tile_scheduler.h"
+#include <iostream>
 
 
 // I think this is the check cuda and stuff we want
@@ -52,7 +53,7 @@ void run_flash_fwd(cudaStream_t stream) {
 
     // CUDA kernels have a default 48kB dynamic SMEM per block
     if constexpr (size(ClusterShape{}) > 1) {
-
+        std::cout << "Cluster > 1 not implemented" << std::endl;
     } else {
         auto kernel = cutlass::device_kernel<AttnKernel>; // only required to set smem
         if (smem_size >= 48 * 1024) {

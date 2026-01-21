@@ -239,6 +239,14 @@ public:
         return pipeline_params_k;
     }
 
+    template <class C>
+    static CUTLASS_DEVICE
+    void println(C s) {
+        if (threadIdx.x == 0) {
+            cute::print(s);
+        }
+    }
+
     // NEED TO MODIFY
     /*
     Remember
@@ -247,6 +255,7 @@ public:
     CUTLASS_DEVICE
     void
     operator()(Params const& params, char* smem_buf) {
+        println("Entered Kernel\n");
         static constexpr int MmaThreadOffset = NumLoadWarpGroups * cutlass::NumThreadsPerWarpGroup;
         static constexpr int kBlockM = get<0>(TileShape_MNK_PV{});
 
@@ -261,12 +270,6 @@ public:
         static_assert(is_same_v<PipelineParamsK, PipelineParamsVt>);
         PipelineParamsVt pipeline_params_vt = pipeline_params_k;
         pipeline_params_vt.transaction_bytes = 0;
-
-        /*
-        Pipelines
-        */
-        MainloopPipelineK pipeline_k = MainloopPipelineK(shared_storage.pipelines.pipeline_k, pipeline_params_k, ClusterShape{});
-        MainloopPipelineVt pipeline_vt = MainloopPipelineVt(shared_storage.pipelines.pipeline_vt, pipeline_params_vt, ClusterShape{});
 
         /*
         Initialize helper classes
@@ -289,11 +292,23 @@ public:
             // prefetch TMA
         }
 
+        // You must init certain pipelines manually
+        if (warp_idx == 0 && lane_predicate) {
+            shared_storage.pipelines.barrier_Q.init(1);
+        }
+
+        /*
+        Pipelines
+        */
+        MainloopPipelineK pipeline_k = MainloopPipelineK(shared_storage.pipelines.pipeline_k, pipeline_params_k, ClusterShape{});
+        MainloopPipelineVt pipeline_vt = MainloopPipelineVt(shared_storage.pipelines.pipeline_vt, pipeline_params_vt, ClusterShape{});
+
         const int n_loops = 4; // stand-in for now
 
+        println("Reached branching\n");
         if (warp_group_idx == 0) {
             // reg dealloc
-
+            println("Entered Producer\n");
             PipelineState smem_pipe_write = cutlass::make_producer_start_state<MainloopPipelineK>();
             int warp_idx_in_warpgroup = __shfl_sync(0xffffffff, (threadIdx.x / 32) % 4, 0);
             static constexpr bool SingleProducerWarp = NumProducerThreads == cutlass::NumThreadsPerWarp;
